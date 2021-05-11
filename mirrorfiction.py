@@ -3,39 +3,38 @@
 import cached_url
 from bs4 import BeautifulSoup
 from telegram_util import compactText
-import os
+import yaml
 
 with open('cookie') as f:
 	cookie = f.read()
 
-def findLinks(soup):
-	for x in soup.find_all('a', class_='sosad-button'):
-		yield x['href']
+def findLinks(url, soup):
+	chapters = set()
+	for item in soup.find_all('a'):
+		href = item.get('href', '')
+		if url in href and len(href) > len(url) + 3:
+			chapters.add(int(href.strip('/').split('/')[-1]))
+	chapters = list(chapters)
+	chapters.sort()
+	print(chapters)
+	for chapter in chapters:
+		yield 'https://mirrorfiction.com/api/chapter/%d?lang=zh-Hans' % chapter
 
 def getSoup(url):
-	return BeautifulSoup(cached_url.get(url, force_cache = True), 'html.parser')
-
-def getMainContent(link, cookie = None):
-	sub_soup = getSoup(link, force_cache = True, cookie = cookie)
-	return sub_soup.find('div', class_='main-text')
+	return BeautifulSoup(cached_url.get(url, {'cookie': cookie}, force_cache = True), 'html.parser')
 
 def getText(link):
-	main_content = getMainContent(link, cookie = None)
-	if not main_content:
-		os.system('rm %s' % cached_url.getFilePath(link))
-		main_content = getMainContent(link, cookie = cookie)
-	for att in ['font-4', 'text-left']:
-		item = main_content.find('div', class_=att)
-		if item:
-			item.decompose()
-	return main_content.get_text(separator='\n')
+	content = yaml.cached_url.get(link, force_cache = True, mode = 'b')
+	content = yaml.load(content, Loader=yaml.FullLoader)
+	content = content['content']
+	return base64.b64decode(content)
 
 def download(url):
 	soup = getSoup(url)
-	# novel_name = soup.find('title').text.split()[0]
-	# result = []
-	# for link in findLinks(soup):
-	# 	result.append(getText(link))
+	title = soup.find('v-book-list')['book-name']
+	result = []
+	for link in findLinks(url, soup):
+		result.append(getText(link))
 	# with open('download/%s.txt' % novel_name, 'w') as f:
 	# 	f.write(compactText(''.join(result)))
 	
